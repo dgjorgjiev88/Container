@@ -67,6 +67,69 @@ class ContainerLexerTest extends LexerTestCase
         CODE, [T::TOKEN_PARAMETER, T::TOKEN_ASSIGN, T::TOKEN_SPACE, T::TOKEN_STRING]);
     }
 
+    public function testHeredocStrings()
+    {
+        // regular multiline strings collapse repeated whitespace / indentation
+        $string = $this->tokensFromCode(<<<'CODE'
+        "line one
+            line two
+        line three"
+        CODE)[0];
+        $this->assertEquals("line one\n line two\nline three", $string->getValue());
+
+        // a heredoc block opts out of that collapsing
+        $string = $this->tokensFromCode(<<<'CODE'
+        <<<EOT
+        line one
+            line two
+        line three
+        EOT
+        CODE)[0];
+        $this->assertEquals("line one\n    line two\nline three", $string->getValue());
+
+        // a heredoc is still just a single string token
+        $this->assertTokenTypes(<<<'CODE'
+        <<<EOT
+        hello
+        EOT
+        CODE, [T::TOKEN_STRING]);
+
+        // single quotes inside a heredoc don't terminate it early
+        $string = $this->tokensFromCode(<<<'CODE'
+        <<<EOT
+        it's "fine".
+        EOT
+        CODE)[0];
+        $this->assertEquals("it's \"fine\".", $string->getValue());
+
+        // a line that merely starts with the tag does not close the block,
+        // only an exact match on its own line does
+        $string = $this->tokensFromCode(<<<'CODE'
+        <<<EOT
+        EOTAG
+        line two
+        EOT
+        CODE)[0];
+        $this->assertEquals("EOTAG\nline two", $string->getValue());
+
+        // whitespace outside of a heredoc block is still collapsed as usual
+        $tokens = $this->tokensFromCode(<<<'CODE'
+        a    <<<EOT
+        raw   text
+        EOT
+           b
+        CODE);
+        $this->assertTokenTypesArray($tokens, [
+            T::TOKEN_IDENTIFIER,
+            T::TOKEN_SPACE,
+            T::TOKEN_STRING,
+            T::TOKEN_LINE,
+            T::TOKEN_SPACE,
+            T::TOKEN_IDENTIFIER,
+        ]);
+        $this->assertEquals('raw   text', $tokens[2]->getValue());
+    }
+
     public function testScalarNumber()
     {
         $this->assertTokenTypes("-1", [T::TOKEN_NUMBER]);
