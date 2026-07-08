@@ -164,7 +164,14 @@ class ContainerLexer
             // be mistaken for the closing quote.
             $rawStrings[$placeholder] = str_replace("'", "\\'", $matches[2]);
 
-            return "'" . $placeholder . "'";
+            // the placeholder collapses the multi-line heredoc (its opening `<<<TAG`
+            // line and closing tag line) onto fewer lines than it occupied in the
+            // source. re-emit the "lost" newlines after the string so line numbers of
+            // the following tokens - and therefore lexer/parser error messages - stay
+            // accurate.
+            $lostNewlines = substr_count($matches[0], "\n") - substr_count($matches[2], "\n");
+
+            return "'" . $placeholder . "'" . str_repeat("\n", $lostNewlines);
         }, $code) ?? $code;
     }
 
